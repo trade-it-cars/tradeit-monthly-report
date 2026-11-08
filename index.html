@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Trade-it · דוח לפי חודשים</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/chartjs-plugin-datalabels/2.2.0/chartjs-plugin-datalabels.min.js"></script>
+<style>
+  :root{
+    --bg:#f0f4ff;--panel:#fff;--panel2:#f5f7fc;--line:#e2e7f1;
+    --text:#1b2238;--muted:#5f6b85;
+    --blue:#3f6fe0;--green:#16a34a;
+    --shadow:0 4px 20px rgba(20,30,60,.09);
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:"Segoe UI",Arial,sans-serif;background:var(--bg);color:var(--text);direction:rtl}
+
+  .topnav{background:#0f1628;display:flex;align-items:center;justify-content:space-between;
+    padding:0 28px;height:56px;border-bottom:3px solid var(--blue);position:sticky;top:0;z-index:50}
+  .topnav-title{color:rgba(255,255,255,.75);font-size:13px;font-weight:600}
+  .wrap{max-width:1200px;margin:0 auto;padding:22px 20px 50px}
+
+  /* month tabs */
+  .month-tabs{display:flex;gap:8px;margin-bottom:18px;flex-wrap:wrap}
+  .month-tab{font-family:inherit;font-size:13.5px;font-weight:700;cursor:pointer;border-radius:999px;
+    padding:8px 18px;border:1.5px solid var(--line);background:var(--panel);color:var(--muted);
+    transition:.15s;box-shadow:var(--shadow)}
+  .month-tab:hover{border-color:var(--blue);color:var(--text)}
+  .month-tab.active{background:linear-gradient(135deg,var(--blue),#2250c0);color:#fff;border-color:transparent}
+  .month-tab .cnt{display:inline-block;margin-inline-start:6px;background:rgba(20,30,60,.07);
+    border-radius:999px;padding:1px 8px;font-size:11px}
+  .month-tab.active .cnt{background:rgba(255,255,255,.22)}
+
+  /* hero */
+  .hero{background:linear-gradient(135deg,#0f1628,#1a2a5e);border-radius:16px;padding:22px 28px;margin-bottom:18px;
+    display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:14px;box-shadow:var(--shadow)}
+  .hero h2{color:#fff;font-size:21px;font-weight:800}
+  .hero-sub{color:rgba(180,200,255,.7);font-size:12.5px;margin-top:3px}
+  .hero-stats{display:flex;gap:12px;flex-wrap:wrap}
+  .hstat{background:rgba(255,255,255,.08);border-radius:10px;padding:11px 20px;text-align:center;min-width:92px}
+  .hstat .hn{font-size:26px;font-weight:800;color:#fff}
+  .hstat .hl{font-size:10.5px;color:rgba(180,200,255,.75);margin-top:3px;font-weight:600}
+  .hstat.green .hn{color:#4ade80}
+
+  /* cards */
+  .card{background:var(--panel);border-radius:14px;padding:18px 20px;box-shadow:var(--shadow);border:1px solid var(--line);margin-bottom:18px}
+  .card h3{font-size:14px;font-weight:700;margin-bottom:3px}
+  .card .hint{color:var(--muted);font-size:11.5px;margin-bottom:12px}
+  .chart-box{position:relative;height:300px}
+  .chart-box canvas{width:100%!important;height:100%!important}
+  .empty-note{display:none;color:var(--muted);font-size:13px;text-align:center;padding:40px 10px}
+
+  .conv-grid{display:grid;grid-template-columns:minmax(0,420px);justify-content:center}
+  .conv-item{background:linear-gradient(135deg,#eff6ff,#f0fdf4);border:1px solid #bfdbfe;border-radius:12px;padding:14px 16px;text-align:center}
+  .cv-pct{font-size:32px;font-weight:800;line-height:1.1}
+  .cv-lbl{font-size:13px;font-weight:700;margin-top:4px}
+  .cv-sub{font-size:11.5px;color:var(--muted);margin-top:2px}
+
+  /* branches */
+  .branches{display:flex;flex-direction:column;gap:14px;margin-bottom:18px}
+  .branch-block{background:var(--panel);border-radius:14px;border:1px solid var(--line);box-shadow:var(--shadow);overflow:hidden}
+  .branch-header{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;
+    padding:15px 20px;cursor:pointer;user-select:none;border-bottom:1px solid var(--line);transition:background .15s}
+  .branch-header:hover{background:#f8faff}
+  .branch-header-right{display:flex;align-items:center;gap:18px;flex-wrap:wrap}
+  .branch-name{font-size:15px;font-weight:800}
+  .branch-summary{display:flex;gap:20px;align-items:center}
+  .bstat{display:flex;flex-direction:column;align-items:center}
+  .bstat .bn{font-size:19px;font-weight:800;line-height:1}
+  .bstat .bl{font-size:10px;color:var(--muted);font-weight:600;margin-top:2px}
+  .bstat.blue .bn{color:var(--blue)} .bstat.green .bn{color:var(--green)}
+  .pct-pill{padding:5px 14px;border-radius:999px;font-size:13px;font-weight:800}
+  .pct-high{background:#dcfce7;color:#15803d} .pct-mid{background:#fef9c3;color:#a16207}
+  .pct-low{background:#f1f5f9;color:#64748b} .pct-zero{background:#fee2e2;color:#b91c1c}
+  .branch-toggle{color:var(--blue);font-size:12px;font-weight:700}
+  .branch-toggle .arrow{display:inline-block;transition:transform .2s}
+  .branch-toggle.open .arrow{transform:rotate(180deg)}
+  .branch-prog{padding:12px 20px 8px}
+  .prog-track{height:10px;background:#e2e7f1;border-radius:999px;overflow:hidden;display:flex}
+  .prog-sold{height:100%;background:linear-gradient(90deg,#16a34a,#4ade80)}
+  .prog-legend{display:flex;gap:14px;flex-wrap:wrap;padding:0 20px 8px}
+  .leg{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--muted)}
+  .leg-sq{width:10px;height:10px;border-radius:2px}
+  .conv-line{padding:0 20px 12px;font-size:12px;color:var(--text);font-weight:700}
+
+  .rep-section{padding:0 20px 16px;display:none;overflow-x:auto}
+  .rep-section.open{display:block}
+  .rep-section h4{font-size:11.5px;font-weight:700;color:var(--muted);margin:4px 0 8px}
+  .rep-header,.rep-row{display:grid;grid-template-columns:1fr 90px 90px 130px;gap:8px;min-width:420px}
+  .rep-header{padding:4px 12px;font-size:10.5px;font-weight:700;color:var(--muted);line-height:1.2}
+  .rep-header span{text-align:center}.rep-header span:first-child{text-align:right}
+  .rep-grid{display:flex;flex-direction:column;gap:7px}
+  .rep-row{align-items:center;padding:8px 12px;border-radius:8px;background:var(--panel2)}
+  .rep-row:hover{background:#eef2ff}
+  .rep-name{font-size:13px;font-weight:700}
+  .rep-num{text-align:center;font-size:13px;font-weight:700}
+  .rep-num.blue{color:var(--blue)}.rep-num.green{color:var(--green)}
+  .pc{display:flex;flex-direction:column;align-items:center;line-height:1.15}
+  .pc b{font-size:13px;font-weight:800}
+  .pc i{font-style:normal;font-size:10px;color:var(--muted)}
+
+  footer{color:var(--muted);font-size:11.5px;text-align:center;margin-top:10px;line-height:1.7}
+  @media(max-width:640px){.hero{flex-direction:column;align-items:flex-start}}
+</style>
+</head>
+<body>
+
+<nav class="topnav">
+  <svg viewBox="0 0 270 88" width="130" height="42" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <linearGradient id="lgB" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#5b9bff"/><stop offset="45%" stop-color="#2f7bff"/><stop offset="100%" stop-color="#0b3aa0"/></linearGradient>
+      <linearGradient id="lgS" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#8b94a5"/><stop offset="50%" stop-color="#5d6678"/><stop offset="100%" stop-color="#3a4254"/></linearGradient>
+    </defs>
+    <path d="M16 28 C74 4 196 4 258 24 C200 14 96 14 32 32 Z" fill="url(#lgB)" opacity=".92"/>
+    <text x="8" y="78" direction="ltr" font-family="Arial,sans-serif" font-weight="900" font-style="italic" font-size="48" letter-spacing="-1.5">
+      <tspan fill="url(#lgB)">TRADE</tspan><tspan fill="url(#lgS)" dx="7">IT</tspan>
+    </text>
+  </svg>
+  <span class="topnav-title">דוח לפי חודשים</span>
+</nav>
+
+<div class="wrap">
+  <div class="month-tabs" id="monthTabs"></div>
+
+  <div class="hero">
+    <div>
+      <h2 id="heroTitle">—</h2>
+      <div class="hero-sub" id="heroSub"></div>
+    </div>
+    <div class="hero-stats">
+      <div class="hstat"><div class="hn" id="hUp">—</div><div class="hl">עלו</div></div>
+      <div class="hstat green"><div class="hn" id="hSold">—</div><div class="hl">נסגרו</div></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3 id="convTitle">אחוזי המרה</h3>
+    <div class="hint" id="convHint"></div>
+    <div class="conv-grid">
+      <div class="conv-item">
+        <div class="cv-pct" id="cvPct">—</div>
+        <div class="cv-lbl">נסגרו מתוך עלו</div>
+        <div class="cv-sub" id="cvSub"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>השוואה לפי סניף</h3>
+    <div class="hint">כחול = עלו | ירוק = נסגרו</div>
+    <div class="chart-box"><canvas id="chBranch"></canvas></div>
+  </div>
+
+  <div class="card">
+    <h3>אחוזי המרה לפי סניף</h3>
+    <div class="hint">גובה העמודה = נסגרו מתוך עלו · בסוגריים: כמה עלו · סניפים עם 5 העלאות ומעלה</div>
+    <div class="chart-box" id="convBox"><canvas id="chConv"></canvas></div>
+    <div class="empty-note" id="convEmpty">אין סניפים עם 5 העלאות ומעלה בחודש הזה</div>
+  </div>
+
+  <div class="branches" id="branches"></div>
+
+  <div class="card">
+    <h3>מגמה לפי חודשים</h3>
+    <div class="hint">עמודות = כמה עלו | קו = אחוז המרה (נסגרו מתוך עלו) · החודש הנבחר מודגש</div>
+    <div class="chart-box"><canvas id="chTrend"></canvas></div>
+  </div>
+
+  <footer id="foot"></footer>
+</div>
+
+<script>
+Chart.register(ChartDataLabels);
+
+/* ---------- data ---------- */
+// rows: [day 'YYYY-MM-DD', rep, branch, plate, closed(1/0)]
+let BASE = [];
+const ALLOWED  = ["הרצליה", "חולון", "חיפה", "נתניה", "ראשון לציון", "רעננה", "תל אביב"];      // only branches that appear in the Excel
+const EXCLUDED = ["הנהלה"];     // never shown (הנהלה)
+const BASE_MAX = '2026-11-06';
+
+const MONTHS_HE = ['ינואר','פברואר','מרץ','אפריל','מאי','יוני','יולי','אוגוסט','ספטמבר','אוקטובר','נובמבר','דצמבר'];
+const monthName = ym => MONTHS_HE[parseInt(ym.slice(5,7),10)-1];
+const fmtDay   = d  => d.slice(8,10) + '.' + d.slice(5,7);
+const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const rate = (n, d) => d ? n / d * 100 : null;
+const fmt  = v => v === null ? '—' : v.toFixed(1) + '%';
+
+let ROWS = BASE.slice();
+let LATEST = null;
+let charts = {};
+const dailyInfo = {loaded:false, updated:null, added:0, filtered:0, dupes:0};
+
+function mk(id, cfg){
+  if(charts[id]) charts[id].destroy();
+  charts[id] = new Chart(document.getElementById(id), cfg);
+}
+
+/* ---------- merge daily.json (rules enforced here too) ---------- */
+async function getJSON(name){
+  const res = await fetch(name + '?ts=' + Date.now(), {cache:'no-store'});
+  if(!res.ok) throw new Error(name + ' ' + res.status);
+  return res.json();
+}
+
+// data.json = the full history (rows: [day, rep, branch, closed]); daily.json = the days refreshed since.
+// Any day that appears in daily.json replaces that whole day from data.json.
+async function loadData(){
+  const base = await getJSON('data.json');
+  let daily = {rows: [], updated: null};
+  try{ daily = await getJSON('daily.json'); }catch(e){ /* optional file */ }
+  const dayRows = daily.rows || [];
+  const replaced = new Set(dayRows.map(r => r[0]));
+  const all = (base.rows || []).filter(r => !replaced.has(r[0])).concat(dayRows);
+  const kept = all.filter(r => ALLOWED.includes(r[2]) && !EXCLUDED.includes(r[2]));
+  ROWS = kept.map(r => [r[0], r[1], r[2], '', Number(r[3])]);
+  dailyInfo.loaded = true;
+  dailyInfo.updated = daily.updated || base.updated || null;
+  dailyInfo.added = dayRows.length;
+  dailyInfo.filtered = all.length - kept.length;
+}
+
+/* ---------- aggregation ---------- */
+function summarize(rows){
+  const by = {};
+  rows.forEach(([d, r, b, p, s]) => {
+    const B = by[b] = by[b] || {name:b, up:0, sold:0, reps:{}};
+    B.up++; B.sold += s;
+    const R = B.reps[r] = B.reps[r] || {name:r, up:0, sold:0};
+    R.up++; R.sold += s;
+  });
+  const branches = Object.values(by).map(B => ({...B, reps:Object.values(B.reps).sort((a,b) => b.up-a.up || b.sold-a.sold)}));
+  branches.sort((a,b) => b.up-a.up || b.sold-a.sold);
+  return {up:rows.length, sold:rows.reduce((t,x) => t + x[4], 0), branches};
+}
+const monthsList = () => [...new Set(ROWS.map(r => r[0].slice(0,7)))].sort();
+
+/* ---------- render ---------- */
+function renderTabs(active){
+  const counts = {};
+  ROWS.forEach(r => { const m = r[0].slice(0,7); counts[m] = (counts[m]||0) + 1; });
+  const list = monthsList().reverse();                 // newest first
+  const multiYear = new Set(list.map(m => m.slice(0,4))).size > 1;
+  document.getElementById('monthTabs').innerHTML = list.map(m =>
+    `<button class="month-tab ${m === active ? 'active' : ''}" data-ym="${m}">${monthName(m)}${multiYear ? ' ' + m.slice(0,4) : ''}<span class="cnt">${counts[m]}</span></button>`
+  ).join('');
+  document.querySelectorAll('.month-tab').forEach(b => b.onclick = () => render(b.dataset.ym));
+}
+
+function render(ym){
+  renderTabs(ym);
+  const rows = ROWS.filter(r => r[0].slice(0,7) === ym);
+  const S = summarize(rows);
+  const mName = monthName(ym), year = ym.slice(0,4);
+  const lastDay = rows.reduce((m, r) => r[0] > m ? r[0] : m, '');
+
+  document.getElementById('heroTitle').textContent = `דוח ${mName} ${year}`;
+  document.getElementById('heroSub').textContent = ym === LATEST ? `נתונים עד ${fmtDay(lastDay)} · החודש עדיין בתהליך` : '';
+  document.getElementById('hUp').textContent = S.up;
+  document.getElementById('hSold').textContent = S.sold;
+
+  document.getElementById('convTitle').textContent = `אחוזי המרה ${mName}`;
+  document.getElementById('convHint').textContent = `כמה הצעות עלו ב${mName} לעומת כמה מהן נסגרו`;
+  document.getElementById('cvPct').textContent = fmt(rate(S.sold, S.up));
+  document.getElementById('cvSub').textContent = `${S.sold} מתוך ${S.up} הצעות`;
+
+  // counts per branch
+  mk('chBranch', {type:'bar',
+    data:{labels:S.branches.map(b => b.name), datasets:[
+      {label:'עלו', data:S.branches.map(b => b.up), backgroundColor:'#3f6fe0', borderRadius:4},
+      {label:'נסגרו', data:S.branches.map(b => b.sold), backgroundColor:'#16a34a', borderRadius:4}]},
+    options:{responsive:true, maintainAspectRatio:false,
+      plugins:{legend:{position:'bottom', labels:{boxWidth:11, padding:14, font:{size:12}}},
+        datalabels:{display:true, color:'#fff', font:{weight:'800', size:12}, textStrokeColor:'rgba(0,0,0,.4)', textStrokeWidth:3,
+          formatter:v => v > 0 ? v : '', anchor:'center', align:'center'}},
+      scales:{x:{ticks:{font:{size:12}}, grid:{display:false}}, y:{beginAtZero:true, grace:'12%', ticks:{font:{size:11}}}}}});
+
+  // conversion per branch (>= 5 uploads)
+  const cb = S.branches.filter(b => b.up >= 5).sort((a,b) => rate(b.sold,b.up) - rate(a.sold,a.up));
+  document.getElementById('convBox').style.display = cb.length ? '' : 'none';
+  document.getElementById('convEmpty').style.display = cb.length ? 'none' : 'block';
+  if(cb.length){
+    mk('chConv', {type:'bar',
+      data:{labels:cb.map(b => `${b.name} (${b.up})`), datasets:[
+        {label:'אחוז המרה', data:cb.map(b => rate(b.sold, b.up)), backgroundColor:'#16a34a', borderRadius:4}]},
+      options:{responsive:true, maintainAspectRatio:false, layout:{padding:{top:18}},
+        plugins:{legend:{display:false},
+          datalabels:{display:true, color:'#1b2238', font:{weight:'800', size:12}, textStrokeColor:'rgba(255,255,255,.9)', textStrokeWidth:3,
+            formatter:v => v.toFixed(1) + '%', anchor:'end', align:'top', offset:2},
+          tooltip:{callbacks:{label:c => { const b = cb[c.dataIndex]; return `${b.sold} מתוך ${b.up} (${c.parsed.y.toFixed(1)}%)`; }}}},
+        scales:{x:{ticks:{font:{size:12}}, grid:{display:false}}, y:{beginAtZero:true, grace:'18%', ticks:{font:{size:11}, callback:v => v + '%'}}}}});
+  }
+
+  renderBranches(S);
+  renderTrend(ym);
+}
+
+function renderBranches(S){
+  const box = document.getElementById('branches');
+  box.innerHTML = S.branches.map(b => {
+    const p = rate(b.sold, b.up);
+    const cls = p === null ? 'pct-low' : p >= 20 ? 'pct-high' : p >= 5 ? 'pct-mid' : p > 0 ? 'pct-low' : 'pct-zero';
+    const top = (p !== null && p >= 20 && b.up >= 10) ? '🏆 ' : '';
+    const w = b.up ? b.sold / b.up * 100 : 0;
+    return `<div class="branch-block">
+      <div class="branch-header" onclick="toggleBranch(this)">
+        <div class="branch-header-right">
+          <div class="branch-name">${top}${esc(b.name)}</div>
+          <div class="branch-summary">
+            <div class="bstat blue"><div class="bn">${b.up}</div><div class="bl">עלו</div></div>
+            <div class="bstat green"><div class="bn">${b.sold}</div><div class="bl">נסגרו</div></div>
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;gap:12px">
+          <span class="pct-pill ${cls}">${fmt(p)} המרה</span>
+          <span class="branch-toggle"><span class="arrow">▼</span></span>
+        </div>
+      </div>
+      <div class="branch-prog"><div class="prog-track"><div class="prog-sold" style="width:${w}%"></div></div></div>
+      <div class="prog-legend">
+        <span class="leg"><span class="leg-sq" style="background:#16a34a"></span>נסגרו (${b.sold})</span>
+        <span class="leg"><span class="leg-sq" style="background:#e2e7f1"></span>פעיל (${b.up - b.sold})</span>
+      </div>
+      <div class="conv-line">המרה: ${b.sold} מתוך ${b.up} (${fmt(p)})</div>
+      <div class="rep-section">
+        <h4>פילוח נציגים</h4>
+        <div class="rep-header"><span>נציג</span><span>עלו</span><span>נסגרו</span><span>אחוז המרה</span></div>
+        <div class="rep-grid">${b.reps.map(r => `<div class="rep-row">
+          <span class="rep-name">${esc(r.name)}</span>
+          <span class="rep-num blue">${r.up}</span>
+          <span class="rep-num green">${r.sold || '—'}</span>
+          <span class="pc"><b>${fmt(rate(r.sold, r.up))}</b><i>${r.sold}/${r.up}</i></span>
+        </div>`).join('')}</div>
+      </div>
+    </div>`;
+  }).join('');
+  const first = box.querySelector('.branch-header');
+  if(first) toggleBranch(first);
+}
+
+function toggleBranch(header){
+  const rep = header.closest('.branch-block').querySelector('.rep-section');
+  const tg = header.querySelector('.branch-toggle');
+  const open = rep.classList.contains('open');
+  rep.classList.toggle('open', !open);
+  tg.classList.toggle('open', !open);
+}
+
+function renderTrend(selected){
+  const ms = monthsList();
+  const stats = ms.map(m => { const r = ROWS.filter(x => x[0].slice(0,7) === m); return {up:r.length, sold:r.reduce((t,x) => t + x[4], 0)}; });
+  mk('chTrend', {type:'bar',
+    data:{labels:ms.map(monthName), datasets:[
+      {type:'bar', label:'עלו', data:stats.map(s => s.up), yAxisID:'y',
+        backgroundColor:ms.map(m => m === selected ? '#2250c0' : '#a9bff0'), borderRadius:4, order:2,
+        datalabels:{display:true, color:'#fff', anchor:'center', align:'center', font:{weight:'800', size:11},
+          textStrokeColor:'rgba(0,0,0,.45)', textStrokeWidth:3, formatter:v => v}},
+      {type:'line', label:'אחוז המרה', data:stats.map(s => rate(s.sold, s.up)), yAxisID:'y1',
+        borderColor:'#16a34a', backgroundColor:'#16a34a', pointRadius:4, tension:.25, order:1,
+        datalabels:{display:true, color:'#15803d', anchor:'end', align:'top', offset:4, font:{weight:'800', size:11},
+          textStrokeColor:'rgba(255,255,255,.9)', textStrokeWidth:3, formatter:v => v.toFixed(0) + '%'}}]},
+    options:{responsive:true, maintainAspectRatio:false, layout:{padding:{top:14}},
+      plugins:{legend:{position:'bottom', labels:{boxWidth:11, padding:14, font:{size:12}}},
+        datalabels:{display:true, color:'#1b2238', anchor:'center', align:'center', font:{weight:'800', size:11}, formatter:v => v}},
+      scales:{x:{grid:{display:false}, ticks:{font:{size:12}}},
+        y:{beginAtZero:true, grace:'10%', ticks:{font:{size:11}}},
+        y1:{position:'right', beginAtZero:true, grace:'15%', grid:{display:false}, ticks:{font:{size:11}, callback:v => v + '%'}}}}});
+}
+
+function renderFooter(){
+  const parts = [];
+  if(dailyInfo.updated) parts.push('עודכן ב-' + dailyInfo.updated.slice(0,16).replace('T',' '));
+  parts.push(ROWS.length.toLocaleString('en-US') + ' הצעות');
+  if(dailyInfo.filtered) parts.push(dailyInfo.filtered + ' שורות סוננו (סניף לא מוכר או הנהלה)');
+  document.getElementById('foot').innerHTML = 'Trade-it · ' + parts.map(esc).join(' · ');
+}
+
+(async function main(){
+  try{ await loadData(); }
+  catch(e){ document.getElementById('foot').textContent = 'לא ניתן לטעון את הנתונים כרגע. נסו לרענן את הדף.'; return; }
+  LATEST = monthsList().slice(-1)[0];          // default = latest month
+  render(LATEST);
+  renderFooter();
+})();
+</script>
+</body>
+</html>
