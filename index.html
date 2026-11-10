@@ -243,7 +243,7 @@ async function loadData(){
   let daily = {rows: [], updated: null};
   try{ daily = await getJSON('daily.json'); }catch(e){ /* optional file */ }
   const dayRows = daily.rows || [];
-  const replaced = new Set(dayRows.map(r => r[0]));
+  const replaced = new Set((daily.days || []).concat(dayRows.map(r => r[0])));   // days refreshed from BO (a day may end up empty)
   const all = (base.rows || []).filter(r => !replaced.has(r[0])).concat(dayRows);
   const kept = all.filter(r => ALLOWED.includes(r[2]) && !EXCLUDED.includes(r[2]));
   ROWS = kept.map(r => [r[0], r[1], r[2], '', Number(r[3])]);
