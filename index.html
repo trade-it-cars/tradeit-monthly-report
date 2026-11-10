@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Trade-it · דוח לפי חודשים</title>
+<title>Trade-it · דוח ביצועים</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/chartjs-plugin-datalabels/2.2.0/chartjs-plugin-datalabels.min.js"></script>
 <style>
@@ -21,8 +21,24 @@
   .topnav-title{color:rgba(255,255,255,.75);font-size:13px;font-weight:600}
   .wrap{max-width:1200px;margin:0 auto;padding:22px 20px 50px}
 
-  /* month tabs */
-  .month-tabs{display:flex;gap:8px;margin-bottom:18px;flex-wrap:wrap}
+  /* filters: view type · period · branch */
+  .filters{display:flex;flex-direction:column;gap:12px;margin-bottom:18px}
+  .frow{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .flabel{font-size:12px;font-weight:700;color:var(--muted);min-width:40px}
+  .seg{display:inline-flex;background:var(--panel);border:1.5px solid var(--line);border-radius:999px;padding:3px;box-shadow:var(--shadow)}
+  .seg button{font-family:inherit;font-size:13px;font-weight:700;border:0;background:transparent;color:var(--muted);
+    padding:6px 16px;border-radius:999px;cursor:pointer;transition:.15s}
+  .seg button:hover{color:var(--text)}
+  .seg button.active{background:#0f1628;color:#fff}
+  .branch-chips{display:flex;gap:6px;flex-wrap:wrap}
+  .branch-chip{font-family:inherit;font-size:12.5px;font-weight:700;cursor:pointer;border-radius:999px;
+    padding:6px 13px;border:1.5px solid var(--line);background:var(--panel);color:var(--muted);transition:.15s}
+  .branch-chip:hover{border-color:#0f1628;color:var(--text)}
+  .branch-chip.active{background:#0f1628;color:#fff;border-color:transparent}
+  .branch-chip .cnt{margin-inline-start:5px;font-size:10.5px;opacity:.75}
+
+  /* period tabs */
+  .month-tabs{display:flex;gap:8px;flex-wrap:wrap}
   .month-tab{font-family:inherit;font-size:13.5px;font-weight:700;cursor:pointer;border-radius:999px;
     padding:8px 18px;border:1.5px solid var(--line);background:var(--panel);color:var(--muted);
     transition:.15s;box-shadow:var(--shadow)}
@@ -101,7 +117,10 @@
   .pc i{font-style:normal;font-size:10px;color:var(--muted)}
 
   footer{color:var(--muted);font-size:11.5px;text-align:center;margin-top:10px;line-height:1.7}
-  @media(max-width:640px){.hero{flex-direction:column;align-items:flex-start}}
+  .empty-card{text-align:center;color:var(--muted);font-size:13px;padding:30px 10px}
+  @media(max-width:640px){.hero{flex-direction:column;align-items:flex-start}
+    .wrap{padding:16px 12px 40px}.topnav{padding:0 14px}
+    .seg button{padding:6px 12px}.flabel{min-width:0;width:100%}}
 </style>
 </head>
 <body>
@@ -117,11 +136,23 @@
       <tspan fill="url(#lgB)">TRADE</tspan><tspan fill="url(#lgS)" dx="7">IT</tspan>
     </text>
   </svg>
-  <span class="topnav-title">דוח לפי חודשים</span>
+  <span class="topnav-title" id="navTitle">דוח לפי חודשים</span>
 </nav>
 
 <div class="wrap">
-  <div class="month-tabs" id="monthTabs"></div>
+  <div class="filters">
+    <div class="frow">
+      <span class="flabel">תצוגה</span>
+      <div class="seg" id="viewSeg" role="group" aria-label="סוג תקופה">
+        <button data-t="month">חודש</button><button data-t="quarter">רבעון</button><button data-t="half">חציון</button><button data-t="year">שנה</button>
+      </div>
+    </div>
+    <div class="month-tabs" id="monthTabs"></div>
+    <div class="frow">
+      <span class="flabel">סניף</span>
+      <div class="branch-chips" id="branchChips" role="group" aria-label="סינון לפי סניף"></div>
+    </div>
+  </div>
 
   <div class="hero">
     <div>
@@ -147,23 +178,24 @@
   </div>
 
   <div class="card">
-    <h3>השוואה לפי סניף</h3>
+    <h3 id="cmpTitle">השוואה לפי סניף</h3>
     <div class="hint">כחול = עלו | ירוק = נסגרו</div>
-    <div class="chart-box"><canvas id="chBranch"></canvas></div>
+    <div class="chart-box" id="cmpBox"><canvas id="chBranch"></canvas></div>
+    <div class="empty-note" id="cmpEmpty">אין הצעות בתקופה הזו</div>
   </div>
 
   <div class="card">
-    <h3>אחוזי המרה לפי סניף</h3>
-    <div class="hint">גובה העמודה = נסגרו מתוך עלו · בסוגריים: כמה עלו · סניפים עם 5 העלאות ומעלה</div>
+    <h3 id="convByTitle">אחוזי המרה לפי סניף</h3>
+    <div class="hint" id="convByHint">גובה העמודה = נסגרו מתוך עלו · בסוגריים: כמה עלו · סניפים עם 5 העלאות ומעלה</div>
     <div class="chart-box" id="convBox"><canvas id="chConv"></canvas></div>
-    <div class="empty-note" id="convEmpty">אין סניפים עם 5 העלאות ומעלה בחודש הזה</div>
+    <div class="empty-note" id="convEmpty">אין סניפים עם 5 העלאות ומעלה בתקופה הזו</div>
   </div>
 
   <div class="branches" id="branches"></div>
 
   <div class="card">
-    <h3>מגמה לפי חודשים</h3>
-    <div class="hint">עמודות = כמה עלו | קו = אחוז המרה (נסגרו מתוך עלו) · החודש הנבחר מודגש</div>
+    <h3 id="trendTitle">מגמה לפי חודשים</h3>
+    <div class="hint" id="trendHint">עמודות = כמה עלו | קו = אחוז המרה (נסגרו מתוך עלו) · החודש הנבחר מודגש</div>
     <div class="chart-box"><canvas id="chTrend"></canvas></div>
   </div>
 
@@ -234,50 +266,134 @@ function summarize(rows){
   branches.sort((a,b) => b.up-a.up || b.sold-a.sold);
   return {up:rows.length, sold:rows.reduce((t,x) => t + x[4], 0), branches};
 }
-const monthsList = () => [...new Set(ROWS.map(r => r[0].slice(0,7)))].sort();
+/* ---------- periods: month / quarter / half / year ---------- */
+const PT = {
+  month:  {key:d => d.slice(0,7),                                              plural:'חודשים',  the:'החודש',  sel:'החודש הנבחר מודגש'},
+  quarter:{key:d => d.slice(0,4) + '-Q' + (Math.floor((+d.slice(5,7) - 1) / 3) + 1), plural:'רבעונים', the:'הרבעון', sel:'הרבעון הנבחר מודגש'},
+  half:   {key:d => d.slice(0,4) + '-H' + (+d.slice(5,7) <= 6 ? 1 : 2),          plural:'חציונים', the:'החציון', sel:'החציון הנבחר מודגש'},
+  year:   {key:d => d.slice(0,4),                                              plural:'שנים',    the:'השנה',   sel:'חודשי השנה הנבחרת מודגשים'},
+};
+const MONTHS_SHORT = ['ינו׳','פבר׳','מרץ','אפר׳','מאי','יוני','יולי','אוג׳','ספט׳','אוק׳','נוב׳','דצמ׳'];
+const multiYear = () => new Set(ROWS.map(r => r[0].slice(0,4))).size > 1;
+function periodName(t, k, withYear){
+  const y = withYear ? ' ' + k.slice(0,4) : '';
+  if(t === 'month')   return monthName(k) + y;
+  if(t === 'quarter') return 'רבעון ' + k.slice(-1) + y;
+  if(t === 'half')    return 'חציון ' + k.slice(-1) + y;
+  return k;
+}
+// month range a period covers, e.g. "יולי – ספטמבר 2026"
+function periodRange(t, k){
+  const y = k.slice(0,4);
+  if(t === 'quarter'){ const q = +k.slice(-1); return `${MONTHS_HE[q*3-3]} – ${MONTHS_HE[q*3-1]} ${y}`; }
+  if(t === 'half')   { const h = +k.slice(-1); return `${MONTHS_HE[h*6-6]} – ${MONTHS_HE[h*6-1]} ${y}`; }
+  return '';
+}
+const periodsList = t => [...new Set(ROWS.map(r => PT[t].key(r[0])))].sort();
+const inB = r => !STATE.branch || r[2] === STATE.branch;
+const STATE = {type:'month', key:null, branch:null};
+let MAXDAY = '';
 
-/* ---------- render ---------- */
-function renderTabs(active){
-  const counts = {};
-  ROWS.forEach(r => { const m = r[0].slice(0,7); counts[m] = (counts[m]||0) + 1; });
-  const list = monthsList().reverse();                 // newest first
-  const multiYear = new Set(list.map(m => m.slice(0,4))).size > 1;
-  document.getElementById('monthTabs').innerHTML = list.map(m =>
-    `<button class="month-tab ${m === active ? 'active' : ''}" data-ym="${m}">${monthName(m)}${multiYear ? ' ' + m.slice(0,4) : ''}<span class="cnt">${counts[m]}</span></button>`
-  ).join('');
-  document.querySelectorAll('.month-tab').forEach(b => b.onclick = () => render(b.dataset.ym));
+/* ---------- state <-> URL (so a filtered view can be bookmarked or shared) ---------- */
+function writeHash(){
+  const p = new URLSearchParams({t:STATE.type, p:STATE.key});
+  if(STATE.branch) p.set('b', STATE.branch);
+  history.replaceState(null, '', '#' + p.toString());
+}
+function readHash(){
+  try{
+    const p = new URLSearchParams(location.hash.slice(1));
+    const t = p.get('t'), k = p.get('p'), b = p.get('b');
+    if(t && PT[t]){ STATE.type = t; if(k && periodsList(t).includes(k)) STATE.key = k; }
+    if(b && ALLOWED.includes(b)) STATE.branch = b;
+  }catch(e){ /* ignore a malformed link */ }
 }
 
-function render(ym){
-  renderTabs(ym);
-  const rows = ROWS.filter(r => r[0].slice(0,7) === ym);
-  const S = summarize(rows);
-  const mName = monthName(ym), year = ym.slice(0,4);
-  const lastDay = rows.reduce((m, r) => r[0] > m ? r[0] : m, '');
+/* ---------- render ---------- */
+function setType(t){
+  if(t === STATE.type) return;
+  // keep the same point in time: the last day with data in the current period
+  const cur = ROWS.filter(r => PT[STATE.type].key(r[0]) === STATE.key);
+  const anchor = cur.length ? cur.reduce((m, r) => r[0] > m ? r[0] : m, '') : MAXDAY;
+  STATE.type = t;
+  STATE.key = PT[t].key(anchor);
+  render();
+}
 
-  document.getElementById('heroTitle').textContent = `דוח ${mName} ${year}`;
-  document.getElementById('heroSub').textContent = ym === LATEST ? `נתונים עד ${fmtDay(lastDay)} · החודש עדיין בתהליך` : '';
+function renderControls(){
+  const t = STATE.type, my = multiYear();
+  document.querySelectorAll('#viewSeg button').forEach(b => {
+    const on = b.dataset.t === t;
+    b.classList.toggle('active', on); b.setAttribute('aria-pressed', on);
+    b.onclick = () => setType(b.dataset.t);
+  });
+  const counts = {};
+  ROWS.forEach(r => { if(inB(r)){ const k = PT[t].key(r[0]); counts[k] = (counts[k]||0) + 1; } });
+  document.getElementById('monthTabs').innerHTML = periodsList(t).reverse().map(k =>
+    `<button class="month-tab ${k === STATE.key ? 'active' : ''}" data-k="${k}">${periodName(t, k, my && t !== 'year')}<span class="cnt">${counts[k] || 0}</span></button>`
+  ).join('');
+  document.querySelectorAll('.month-tab').forEach(b => b.onclick = () => { STATE.key = b.dataset.k; render(); });
+
+  const inPeriod = ROWS.filter(r => PT[t].key(r[0]) === STATE.key);
+  const bc = {};
+  inPeriod.forEach(r => bc[r[2]] = (bc[r[2]]||0) + 1);
+  const chips = [{v:'', name:'כל הסניפים', n:inPeriod.length}].concat(ALLOWED.map(b => ({v:b, name:b, n:bc[b] || 0})));
+  document.getElementById('branchChips').innerHTML = chips.map(c =>
+    `<button class="branch-chip ${(STATE.branch || '') === c.v ? 'active' : ''}" data-b="${esc(c.v)}" aria-pressed="${(STATE.branch || '') === c.v}">${esc(c.name)}<span class="cnt">${c.n}</span></button>`
+  ).join('');
+  document.querySelectorAll('.branch-chip').forEach(b => b.onclick = () => { STATE.branch = b.dataset.b || null; render(); });
+  document.getElementById('navTitle').textContent = `דוח לפי ${PT[t].plural}`;
+}
+
+function render(){
+  const t = STATE.type, k = STATE.key, br = STATE.branch;
+  renderControls();
+  writeHash();
+  const rows = ROWS.filter(r => PT[t].key(r[0]) === k && inB(r));
+  const S = summarize(rows);
+  const pName = periodName(t, k, false), year = k.slice(0,4);
+  const bTag = br ? ' · ' + br : '';
+  const isCurrent = k === PT[t].key(MAXDAY);
+  const lastDay = ROWS.filter(r => PT[t].key(r[0]) === k).reduce((m, r) => r[0] > m ? r[0] : m, '');
+
+  const ORD = ['ראשון','שני','שלישי','רביעי'];
+  const longName = t === 'quarter' ? 'רבעון ' + ORD[+k.slice(-1)-1] : t === 'half' ? 'חציון ' + ORD[+k.slice(-1)-1] : pName;
+  document.getElementById('heroTitle').textContent = (t === 'year' ? `דוח שנת ${year}` : `דוח ${longName} ${year}`) + bTag;
+  const sub = [];
+  if(t === 'quarter' || t === 'half') sub.push(periodRange(t, k));
+  if(isCurrent && lastDay) sub.push(`נתונים עד ${fmtDay(lastDay)} · ${PT[t].the} עדיין בתהליך`);
+  document.getElementById('heroSub').textContent = sub.join(' · ');
   document.getElementById('hUp').textContent = S.up;
   document.getElementById('hSold').textContent = S.sold;
 
-  document.getElementById('convTitle').textContent = `אחוזי המרה ${mName}`;
-  document.getElementById('convHint').textContent = `כמה הצעות עלו ב${mName} לעומת כמה מהן נסגרו`;
+  const inName = t === 'year' ? `ב-${year}` : `ב${pName}`;
+  document.getElementById('convTitle').textContent = `אחוזי המרה ${t === 'year' ? year : pName}${bTag}`;
+  document.getElementById('convHint').textContent = `כמה הצעות עלו ${inName}${br ? ' בסניף ' + br : ''} לעומת כמה מהן נסגרו`;
   document.getElementById('cvPct').textContent = fmt(rate(S.sold, S.up));
   document.getElementById('cvSub').textContent = `${S.sold} מתוך ${S.up} הצעות`;
 
-  // counts per branch
-  mk('chBranch', {type:'bar',
-    data:{labels:S.branches.map(b => b.name), datasets:[
-      {label:'עלו', data:S.branches.map(b => b.up), backgroundColor:'#3f6fe0', borderRadius:4},
-      {label:'נסגרו', data:S.branches.map(b => b.sold), backgroundColor:'#16a34a', borderRadius:4}]},
+  // comparison: per branch, or per rep when one branch is selected
+  const units = br ? (S.branches[0] ? S.branches[0].reps : []) : S.branches;
+  const what = br ? 'נציג' : 'סניף', whatPl = br ? 'נציגים' : 'סניפים';
+  document.getElementById('cmpTitle').textContent = `השוואה לפי ${what}${bTag}`;
+  document.getElementById('cmpBox').style.display = units.length ? '' : 'none';
+  document.getElementById('cmpEmpty').style.display = units.length ? 'none' : 'block';
+  document.getElementById('cmpEmpty').textContent = br ? `אין הצעות בסניף ${br} בתקופה הזו` : 'אין הצעות בתקופה הזו';
+  if(units.length) mk('chBranch', {type:'bar',
+    data:{labels:units.map(b => b.name), datasets:[
+      {label:'עלו', data:units.map(b => b.up), backgroundColor:'#3f6fe0', borderRadius:4},
+      {label:'נסגרו', data:units.map(b => b.sold), backgroundColor:'#16a34a', borderRadius:4}]},
     options:{responsive:true, maintainAspectRatio:false,
       plugins:{legend:{position:'bottom', labels:{boxWidth:11, padding:14, font:{size:12}}},
         datalabels:{display:true, color:'#fff', font:{weight:'800', size:12}, textStrokeColor:'rgba(0,0,0,.4)', textStrokeWidth:3,
           formatter:v => v > 0 ? v : '', anchor:'center', align:'center'}},
       scales:{x:{ticks:{font:{size:12}}, grid:{display:false}}, y:{beginAtZero:true, grace:'12%', ticks:{font:{size:11}}}}}});
 
-  // conversion per branch (>= 5 uploads)
-  const cb = S.branches.filter(b => b.up >= 5).sort((a,b) => rate(b.sold,b.up) - rate(a.sold,a.up));
+  // conversion per branch / per rep (>= 5 uploads)
+  const cb = units.filter(b => b.up >= 5).sort((a,b) => rate(b.sold,b.up) - rate(a.sold,a.up));
+  document.getElementById('convByTitle').textContent = `אחוזי המרה לפי ${what}${bTag}`;
+  document.getElementById('convByHint').textContent = `גובה העמודה = נסגרו מתוך עלו · בסוגריים: כמה עלו · ${whatPl} עם 5 העלאות ומעלה`;
+  document.getElementById('convEmpty').textContent = `אין ${whatPl} עם 5 העלאות ומעלה בתקופה הזו`;
   document.getElementById('convBox').style.display = cb.length ? '' : 'none';
   document.getElementById('convEmpty').style.display = cb.length ? 'none' : 'block';
   if(cb.length){
@@ -293,11 +409,15 @@ function render(ym){
   }
 
   renderBranches(S);
-  renderTrend(ym);
+  renderTrend();
 }
 
 function renderBranches(S){
   const box = document.getElementById('branches');
+  if(!S.branches.length){
+    box.innerHTML = `<div class="card empty-card">${STATE.branch ? 'אין הצעות בסניף ' + esc(STATE.branch) + ' בתקופה הזו' : 'אין הצעות בתקופה הזו'}</div>`;
+    return;
+  }
   box.innerHTML = S.branches.map(b => {
     const p = rate(b.sold, b.up);
     const cls = p === null ? 'pct-low' : p >= 20 ? 'pct-high' : p >= 5 ? 'pct-mid' : p > 0 ? 'pct-low' : 'pct-zero';
@@ -347,19 +467,26 @@ function toggleBranch(header){
   tg.classList.toggle('open', !open);
 }
 
-function renderTrend(selected){
-  const ms = monthsList();
-  const stats = ms.map(m => { const r = ROWS.filter(x => x[0].slice(0,7) === m); return {up:r.length, sold:r.reduce((t,x) => t + x[4], 0)}; });
+function renderTrend(){
+  const t = STATE.type, sel = STATE.key, my = multiYear();
+  // a year view trends by month (with the selected year's months highlighted); the others trend by their own unit
+  const unit = t === 'year' ? 'month' : t;
+  const ks = periodsList(unit);
+  const isSel = k => t === 'year' ? k.slice(0,4) === sel : k === sel;
+  const lbl = k => unit === 'month' ? (my ? MONTHS_SHORT[+k.slice(5,7)-1] + ' ' + k.slice(2,4) : monthName(k)) : periodName(unit, k, my);
+  const stats = ks.map(k => { const r = ROWS.filter(x => PT[unit].key(x[0]) === k && inB(x)); return {up:r.length, sold:r.reduce((a,x) => a + x[4], 0)}; });
+  document.getElementById('trendTitle').textContent = `מגמה לפי ${PT[unit].plural}${STATE.branch ? ' · ' + STATE.branch : ''}`;
+  document.getElementById('trendHint').textContent = `עמודות = כמה עלו | קו = אחוז המרה (נסגרו מתוך עלו) · ${PT[t].sel}`;
   mk('chTrend', {type:'bar',
-    data:{labels:ms.map(monthName), datasets:[
+    data:{labels:ks.map(lbl), datasets:[
       {type:'bar', label:'עלו', data:stats.map(s => s.up), yAxisID:'y',
-        backgroundColor:ms.map(m => m === selected ? '#2250c0' : '#a9bff0'), borderRadius:4, order:2,
+        backgroundColor:ks.map(k => isSel(k) ? '#2250c0' : '#a9bff0'), borderRadius:4, order:2,
         datalabels:{display:true, color:'#fff', anchor:'center', align:'center', font:{weight:'800', size:11},
           textStrokeColor:'rgba(0,0,0,.45)', textStrokeWidth:3, formatter:v => v}},
       {type:'line', label:'אחוז המרה', data:stats.map(s => rate(s.sold, s.up)), yAxisID:'y1',
         borderColor:'#16a34a', backgroundColor:'#16a34a', pointRadius:4, tension:.25, order:1,
         datalabels:{display:true, color:'#15803d', anchor:'end', align:'top', offset:4, font:{weight:'800', size:11},
-          textStrokeColor:'rgba(255,255,255,.9)', textStrokeWidth:3, formatter:v => v.toFixed(0) + '%'}}]},
+          textStrokeColor:'rgba(255,255,255,.9)', textStrokeWidth:3, formatter:v => v === null ? '' : v.toFixed(0) + '%'}}]},
     options:{responsive:true, maintainAspectRatio:false, layout:{padding:{top:14}},
       plugins:{legend:{position:'bottom', labels:{boxWidth:11, padding:14, font:{size:12}}},
         datalabels:{display:true, color:'#1b2238', anchor:'center', align:'center', font:{weight:'800', size:11}, formatter:v => v}},
@@ -379,8 +506,10 @@ function renderFooter(){
 (async function main(){
   try{ await loadData(); }
   catch(e){ document.getElementById('foot').textContent = 'לא ניתן לטעון את הנתונים כרגע. נסו לרענן את הדף.'; return; }
-  LATEST = monthsList().slice(-1)[0];          // default = latest month
-  render(LATEST);
+  MAXDAY = ROWS.reduce((m, r) => r[0] > m ? r[0] : m, '');
+  readHash();                                   // a shared link may pick the view, period and branch
+  if(!STATE.key) STATE.key = PT[STATE.type].key(MAXDAY);   // default = latest month, all branches
+  render();
   renderFooter();
 })();
 </script>
