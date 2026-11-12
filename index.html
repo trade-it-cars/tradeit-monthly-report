@@ -36,6 +36,8 @@
   .branch-chip:hover{border-color:#0f1628;color:var(--text)}
   .branch-chip.active{background:#0f1628;color:#fff;border-color:transparent}
   .branch-chip .cnt{margin-inline-start:5px;font-size:10.5px;opacity:.75}
+  .branch-chip .rng{margin-inline-start:6px;font-size:10.5px;font-weight:600;opacity:.7}
+  #weekRow[hidden]{display:none}
 
   /* period tabs */
   .month-tabs{display:flex;gap:8px;flex-wrap:wrap}
@@ -148,6 +150,10 @@
       </div>
     </div>
     <div class="month-tabs" id="monthTabs"></div>
+    <div class="frow" id="weekRow" hidden>
+      <span class="flabel">שבוע</span>
+      <div class="branch-chips" id="weekChips" role="group" aria-label="בחירת שבוע בחודש"></div>
+    </div>
     <div class="frow">
       <span class="flabel">סניף</span>
       <div class="branch-chips" id="branchChips" role="group" aria-label="סינון לפי סניף"></div>
@@ -291,20 +297,41 @@ function periodRange(t, k){
 }
 const periodsList = t => [...new Set(ROWS.map(r => PT[t].key(r[0])))].sort();
 const inB = r => !STATE.branch || r[2] === STATE.branch;
-const STATE = {type:'month', key:null, branch:null};
+const STATE = {type:'month', key:null, branch:null, week:null};
 let MAXDAY = '';
+
+/* ---------- weeks inside a month: Sunday–Saturday, cut at the month's edges ---------- */
+const TODAY = new Intl.DateTimeFormat('en-CA', {timeZone:'Asia/Jerusalem'}).format(new Date());
+function monthWeeks(ym){
+  const y = +ym.slice(0,4), m = +ym.slice(5,7);
+  const first = new Date(Date.UTC(y, m-1, 1)).getUTCDay(), dim = new Date(Date.UTC(y, m, 0)).getUTCDate();
+  const day = n => ym + '-' + String(n).padStart(2,'0');
+  const out = [];
+  for(let n = 1; ; n++){
+    const s = Math.max(1, (n-1)*7 - first + 1), e = Math.min(dim, n*7 - first);
+    if(s > dim) break;
+    out.push({n, from:day(s), to:day(e)});
+  }
+  return out.filter(w => w.from <= TODAY);           // no future weeks
+}
+const curWeek = () => STATE.type === 'month' && STATE.week ? monthWeeks(STATE.key).find(w => w.n === STATE.week) || null : null;
+const inW = r => { const w = curWeek(); return !w || (r[0] >= w.from && r[0] <= w.to); };
+const weekRange = w => `${fmtDay(w.from)} – ${fmtDay(w.to)}`;
+const weekShort = w => w.from === w.to ? `${+w.from.slice(8)}.${+w.from.slice(5,7)}` : `${+w.from.slice(8)}–${+w.to.slice(8)}.${+w.from.slice(5,7)}`;
 
 /* ---------- state <-> URL (so a filtered view can be bookmarked or shared) ---------- */
 function writeHash(){
   const p = new URLSearchParams({t:STATE.type, p:STATE.key});
+  if(curWeek()) p.set('w', STATE.week);
   if(STATE.branch) p.set('b', STATE.branch);
   history.replaceState(null, '', '#' + p.toString());
 }
 function readHash(){
   try{
     const p = new URLSearchParams(location.hash.slice(1));
-    const t = p.get('t'), k = p.get('p'), b = p.get('b');
+    const t = p.get('t'), k = p.get('p'), b = p.get('b'), w = parseInt(p.get('w'), 10);
     if(t && PT[t]){ STATE.type = t; if(k && periodsList(t).includes(k)) STATE.key = k; }
+    if(w > 0) STATE.week = w;                     // checked against the month in main()
     if(b && ALLOWED.includes(b)) STATE.branch = b;
   }catch(e){ /* ignore a malformed link */ }
 }
@@ -317,6 +344,7 @@ function setType(t){
   const anchor = cur.length ? cur.reduce((m, r) => r[0] > m ? r[0] : m, '') : MAXDAY;
   STATE.type = t;
   STATE.key = PT[t].key(anchor);
+  STATE.week = null;
   render();
 }
 
@@ -332,36 +360,53 @@ function renderControls(){
   document.getElementById('monthTabs').innerHTML = periodsList(t).reverse().map(k =>
     `<button class="month-tab ${k === STATE.key ? 'active' : ''}" data-k="${k}">${periodName(t, k, my && t !== 'year')}<span class="cnt">${counts[k] || 0}</span></button>`
   ).join('');
-  document.querySelectorAll('.month-tab').forEach(b => b.onclick = () => { STATE.key = b.dataset.k; render(); });
+  document.querySelectorAll('.month-tab').forEach(b => b.onclick = () => { STATE.key = b.dataset.k; STATE.week = null; render(); });
 
-  const inPeriod = ROWS.filter(r => PT[t].key(r[0]) === STATE.key);
+  // week buttons inside the selected month
+  const weekRow = document.getElementById('weekRow');
+  weekRow.hidden = t !== 'month';
+  if(t === 'month'){
+    const inMonth = ROWS.filter(r => r[0].slice(0,7) === STATE.key && inB(r));
+    const wk = curWeek();
+    const chips = [{n:'', name:'כל החודש', rng:'', c:inMonth.length}].concat(monthWeeks(STATE.key).map(w =>
+      ({n:String(w.n), name:'שבוע ' + w.n, rng:weekShort(w), c:inMonth.filter(r => r[0] >= w.from && r[0] <= w.to).length})));
+    document.getElementById('weekChips').innerHTML = chips.map(c => {
+      const on = String(wk ? wk.n : '') === c.n;
+      return `<button class="branch-chip ${on ? 'active' : ''}" data-w="${c.n}" aria-pressed="${on}">${c.name}${c.rng ? `<span class="rng" dir="rtl">${c.rng}</span>` : ''}<span class="cnt" dir="rtl">${c.c}</span></button>`;
+    }).join('');
+    document.querySelectorAll('#weekChips .branch-chip').forEach(b => b.onclick = () => { STATE.week = b.dataset.w ? +b.dataset.w : null; render(); });
+  }
+
+  const inPeriod = ROWS.filter(r => PT[t].key(r[0]) === STATE.key && inW(r));
   const bc = {};
   inPeriod.forEach(r => bc[r[2]] = (bc[r[2]]||0) + 1);
   const chips = [{v:'', name:'כל הסניפים', n:inPeriod.length}].concat(ALLOWED.map(b => ({v:b, name:b, n:bc[b] || 0})));
   document.getElementById('branchChips').innerHTML = chips.map(c =>
     `<button class="branch-chip ${(STATE.branch || '') === c.v ? 'active' : ''}" data-b="${esc(c.v)}" aria-pressed="${(STATE.branch || '') === c.v}">${esc(c.name)}<span class="cnt">${c.n}</span></button>`
   ).join('');
-  document.querySelectorAll('.branch-chip').forEach(b => b.onclick = () => { STATE.branch = b.dataset.b || null; render(); });
-  document.getElementById('navTitle').textContent = `דוח לפי ${PT[t].plural}`;
+  document.querySelectorAll('#branchChips .branch-chip').forEach(b => b.onclick = () => { STATE.branch = b.dataset.b || null; render(); });
+  document.getElementById('navTitle').textContent = curWeek() ? 'דוח לפי שבועות' : `דוח לפי ${PT[t].plural}`;
 }
 
 function render(){
   const t = STATE.type, k = STATE.key, br = STATE.branch;
   renderControls();
   writeHash();
-  const rows = ROWS.filter(r => PT[t].key(r[0]) === k && inB(r));
+  const wk = curWeek();
+  const rows = ROWS.filter(r => PT[t].key(r[0]) === k && inB(r) && inW(r));
   const S = summarize(rows);
-  const pName = periodName(t, k, false), year = k.slice(0,4);
+  const pName = wk ? `שבוע ${wk.n} ב${monthName(k)}` : periodName(t, k, false), year = k.slice(0,4);
   const bTag = br ? ' · ' + br : '';
-  const isCurrent = k === PT[t].key(MAXDAY);
-  const lastDay = ROWS.filter(r => PT[t].key(r[0]) === k).reduce((m, r) => r[0] > m ? r[0] : m, '');
+  const isCurrent = wk ? (TODAY >= wk.from && TODAY <= wk.to) : k === PT[t].key(MAXDAY);
+  const lastDay = ROWS.filter(r => PT[t].key(r[0]) === k && inW(r)).reduce((m, r) => r[0] > m ? r[0] : m, '');
 
   const ORD = ['ראשון','שני','שלישי','רביעי'];
   const longName = t === 'quarter' ? 'רבעון ' + ORD[+k.slice(-1)-1] : t === 'half' ? 'חציון ' + ORD[+k.slice(-1)-1] : pName;
-  document.getElementById('heroTitle').textContent = (t === 'year' ? `דוח שנת ${year}` : `דוח ${longName} ${year}`) + bTag;
+  document.getElementById('heroTitle').textContent = (t === 'year' ? `דוח שנת ${year}` : wk ? `דוח ${monthName(k)} ${year} · שבוע ${wk.n}` : `דוח ${longName} ${year}`) + bTag;
   const sub = [];
   if(t === 'quarter' || t === 'half') sub.push(periodRange(t, k));
-  if(isCurrent && lastDay) sub.push(`נתונים עד ${fmtDay(lastDay)} · ${PT[t].the} עדיין בתהליך`);
+  if(wk) sub.push(weekRange(wk));
+  if(isCurrent && lastDay) sub.push(`נתונים עד ${fmtDay(lastDay)} · ${wk ? 'השבוע' : PT[t].the} עדיין בתהליך`);
   document.getElementById('heroSub').textContent = sub.join(' · ');
   document.getElementById('hUp').textContent = S.up;
   document.getElementById('hSold').textContent = S.sold;
@@ -468,6 +513,15 @@ function toggleBranch(header){
 }
 
 function renderTrend(){
+  const wk = curWeek();
+  if(wk){
+    // a week view trends by the weeks of its month, the selected week highlighted
+    const ws = monthWeeks(STATE.key);
+    const stats = ws.map(w => { const r = ROWS.filter(x => x[0] >= w.from && x[0] <= w.to && inB(x)); return {up:r.length, sold:r.reduce((a,x) => a + x[4], 0)}; });
+    document.getElementById('trendTitle').textContent = `מגמה לפי שבועות · ${monthName(STATE.key)}${STATE.branch ? ' · ' + STATE.branch : ''}`;
+    document.getElementById('trendHint').textContent = 'עמודות = כמה עלו | קו = אחוז המרה (נסגרו מתוך עלו) · השבוע הנבחר מודגש';
+    return trendChart(ws.map(w => [`שבוע ${w.n}`, weekShort(w)]), stats, ws.map(w => w.n === wk.n));
+  }
   const t = STATE.type, sel = STATE.key, my = multiYear();
   // a year view trends by month (with the selected year's months highlighted); the others trend by their own unit
   const unit = t === 'year' ? 'month' : t;
@@ -477,10 +531,14 @@ function renderTrend(){
   const stats = ks.map(k => { const r = ROWS.filter(x => PT[unit].key(x[0]) === k && inB(x)); return {up:r.length, sold:r.reduce((a,x) => a + x[4], 0)}; });
   document.getElementById('trendTitle').textContent = `מגמה לפי ${PT[unit].plural}${STATE.branch ? ' · ' + STATE.branch : ''}`;
   document.getElementById('trendHint').textContent = `עמודות = כמה עלו | קו = אחוז המרה (נסגרו מתוך עלו) · ${PT[t].sel}`;
+  trendChart(ks.map(lbl), stats, ks.map(isSel));
+}
+
+function trendChart(labels, stats, selected){
   mk('chTrend', {type:'bar',
-    data:{labels:ks.map(lbl), datasets:[
+    data:{labels, datasets:[
       {type:'bar', label:'עלו', data:stats.map(s => s.up), yAxisID:'y',
-        backgroundColor:ks.map(k => isSel(k) ? '#2250c0' : '#a9bff0'), borderRadius:4, order:2,
+        backgroundColor:selected.map(on => on ? '#2250c0' : '#a9bff0'), borderRadius:4, order:2,
         datalabels:{display:true, color:'#fff', anchor:'center', align:'center', font:{weight:'800', size:11},
           textStrokeColor:'rgba(0,0,0,.45)', textStrokeWidth:3, formatter:v => v}},
       {type:'line', label:'אחוז המרה', data:stats.map(s => rate(s.sold, s.up)), yAxisID:'y1',
@@ -507,8 +565,9 @@ function renderFooter(){
   try{ await loadData(); }
   catch(e){ document.getElementById('foot').textContent = 'לא ניתן לטעון את הנתונים כרגע. נסו לרענן את הדף.'; return; }
   MAXDAY = ROWS.reduce((m, r) => r[0] > m ? r[0] : m, '');
-  readHash();                                   // a shared link may pick the view, period and branch
+  readHash();                                   // a shared link may pick the view, period, week and branch
   if(!STATE.key) STATE.key = PT[STATE.type].key(MAXDAY);   // default = latest month, all branches
+  if(STATE.week && !curWeek()) STATE.week = null;
   render();
   renderFooter();
 })();
