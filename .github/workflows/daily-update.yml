@@ -1,0 +1,66 @@
+name: Daily report update from BO
+
+# Runs on GitHub's servers every evening, no computer needed.
+# Two schedules because Israel switches between UTC+3 (summer) and UTC+2 (winter);
+# the script runs only once, from 19:00 Israel time.
+on:
+  schedule:
+    - cron: '7 16 * * *'
+    - cron: '7 17 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pages: write
+
+concurrency:
+  group: daily-update
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+
+      - name: Read BO and update daily.json
+        id: upd
+        env:
+          BO_EMAIL: ${{ secrets.BO_EMAIL }}
+          BO_PASSWORD: ${{ secrets.BO_PASSWORD }}
+          FORCE: ${{ github.event_name == 'workflow_dispatch' }}
+        run: node scripts/daily-update.mjs
+
+      - name: Commit to main
+        id: commit
+        run: |
+          if git diff --quiet -- daily.json; then echo "nothing to commit"; exit 0; fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add daily.json
+          git commit -m "Daily update $(TZ=Asia/Jerusalem date '+%Y-%m-%d %H:%M')"
+          git push origin HEAD:main
+          echo "pushed=true" >> "$GITHUB_OUTPUT"
+
+      - name: Publish site
+        if: steps.commit.outputs.pushed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api -X POST "repos/${{ github.repository }}/pages/builds" || echo "pages build request failed (the push may already trigger it)"
+
+      - name: Verify site
+        if: steps.commit.outputs.pushed == 'true'
+        run: |
+          want="${{ steps.upd.outputs.updated }}"
+          for i in $(seq 1 24); do
+            sleep 30
+            got=$(curl -fsS "https://trade-it-cars.github.io/tradeit-monthly-report/daily.json?ts=$(date +%s)" | jq -r .updated || true)
+            echo "site shows: $got (expected $want)"
+            [ "$got" = "$want" ] && exit 0
+          done
+          echo "::error::the site did not show the new update time"; exit 1
