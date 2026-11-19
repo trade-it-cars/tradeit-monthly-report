@@ -129,8 +129,19 @@ async function main() {
   const token = await signIn(process.env.BO_EMAIL, process.env.BO_PASSWORD);
   const base = JSON.parse(readFileSync('data.json', 'utf8'));
   const from = ilDay(new Date(now.getTime() - WINDOW * 86400000));
-  const all = await fetchBoRows(token, from);
+  // assign.json: cars that management opened in BO for a branch -> { "<plate>": { rep, branch } }.
+  // Day and status still come from BO; only the rep and branch are replaced.
+  let assign = {};
+  try { assign = JSON.parse(readFileSync('assign.json', 'utf8')); } catch (e) { /* optional file */ }
+  const assigned = [];
+  const all = (await fetchBoRows(token, from)).map(r => {
+    const a = assign[r.plate];
+    if (!a || !a.rep || !a.branch) return r;
+    assigned.push(r.plate);
+    return { ...r, rep: a.rep, branch: a.branch };
+  });
   if (!all.length) throw new Error('bo_returned_no_cars');
+  if (assigned.length) console.log('assigned to a branch: ' + assigned.join(', '));
   const { next, report } = computeUpdate(all, base, daily, now);
   writeFileSync('daily.json', JSON.stringify(next, null, 1) + '\n');
   console.log(JSON.stringify(report));
