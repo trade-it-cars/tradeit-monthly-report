@@ -16,7 +16,7 @@ import { readFileSync, writeFileSync } from 'node:fs';
 const API_KEY = 'AIzaSyAi9czXc4VFqC10-BgEbPiHcPzjvBPWAfk'; // public web key of the TradeIT Firebase project
 const BASE = 'https://firestore.googleapis.com/v1/projects/tradehit-aee72/databases/(default)/documents';
 const WINDOW = 30;
-const RUN_FROM_HOUR = 19; // Israel time
+const FIRST_HOUR = 7; // Israel time; scheduled runs before this are skipped
 const ALLOWED = ['רעננה', 'הרצליה', 'חיפה', 'נתניה', 'ראשון לציון', 'תל אביב', 'חולון', 'ירושלים', 'פתח תקווה', 'באר שבע', 'טבריה', 'מודיעין', 'חדרה', 'עכו'];
 
 // BO sale-status labels (from the BO app) and the user's "open" rule applied to the label
@@ -117,10 +117,8 @@ async function main() {
   const daily = JSON.parse(readFileSync('daily.json', 'utf8'));
   const p = ilParts(now);
   if (process.env.FORCE !== 'true') {
-    // two schedules (summer/winter time); run once a day from 19:00 Israel time
-    if (+p.hour < RUN_FROM_HOUR) { console.log(`skip: ${p.hour}:${p.minute} Israel time is before ${RUN_FROM_HOUR}:00`); return; }
-    const today = `${p.year}-${p.month}-${p.day}`;
-    if (String(daily.updated || '') >= `${today}T${String(RUN_FROM_HOUR).padStart(2, '0')}:00`) { console.log('skip: already updated this evening (' + daily.updated + ')'); return; }
+    // hourly during the day (plus the 19:07 evening run); nothing at night
+    if (+p.hour < FIRST_HOUR) { console.log(`skip: ${p.hour}:${p.minute} Israel time is before ${FIRST_HOUR}:00`); return; }
   }
   if (!process.env.BO_EMAIL || !process.env.BO_PASSWORD) {
     if (process.env.FORCE === 'true') throw new Error('missing BO_EMAIL / BO_PASSWORD repository secrets');
