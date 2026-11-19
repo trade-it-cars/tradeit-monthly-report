@@ -146,7 +146,7 @@
     <div class="frow">
       <span class="flabel">תצוגה</span>
       <div class="seg" id="viewSeg" role="group" aria-label="סוג תקופה">
-        <button data-t="month">חודש</button><button data-t="quarter">רבעון</button><button data-t="half">חציון</button><button data-t="year">שנה</button>
+        <button data-t="today">היום</button><button data-t="month">חודש</button><button data-t="quarter">רבעון</button><button data-t="half">חציון</button><button data-t="year">שנה</button>
       </div>
     </div>
     <div class="month-tabs" id="monthTabs"></div>
@@ -199,7 +199,7 @@
 
   <div class="branches" id="branches"></div>
 
-  <div class="card">
+  <div class="card" id="trendCard">
     <h3 id="trendTitle">מגמה לפי חודשים</h3>
     <div class="hint" id="trendHint">עמודות = כמה עלו | קו = אחוז המרה (נסגרו מתוך עלו) · החודש הנבחר מודגש</div>
     <div class="chart-box"><canvas id="chTrend"></canvas></div>
@@ -272,8 +272,10 @@ function summarize(rows){
   branches.sort((a,b) => b.up-a.up || b.sold-a.sold);
   return {up:rows.length, sold:rows.reduce((t,x) => t + x[4], 0), branches};
 }
-/* ---------- periods: month / quarter / half / year ---------- */
+/* ---------- periods: today / month / quarter / half / year ---------- */
+const TODAY = new Intl.DateTimeFormat('en-CA', {timeZone:'Asia/Jerusalem'}).format(new Date());
 const PT = {
+  today:  {key:d => d === TODAY ? 'today' : '',                                plural:'ימים',    the:'היום',   sel:''},
   month:  {key:d => d.slice(0,7),                                              plural:'חודשים',  the:'החודש',  sel:'החודש הנבחר מודגש'},
   quarter:{key:d => d.slice(0,4) + '-Q' + (Math.floor((+d.slice(5,7) - 1) / 3) + 1), plural:'רבעונים', the:'הרבעון', sel:'הרבעון הנבחר מודגש'},
   half:   {key:d => d.slice(0,4) + '-H' + (+d.slice(5,7) <= 6 ? 1 : 2),          plural:'חציונים', the:'החציון', sel:'החציון הנבחר מודגש'},
@@ -301,7 +303,6 @@ const STATE = {type:'month', key:null, branch:null, week:null};
 let MAXDAY = '';
 
 /* ---------- weeks inside a month: Sunday–Saturday, cut at the month's edges ---------- */
-const TODAY = new Intl.DateTimeFormat('en-CA', {timeZone:'Asia/Jerusalem'}).format(new Date());
 function monthWeeks(ym){
   const y = +ym.slice(0,4), m = +ym.slice(5,7);
   const first = new Date(Date.UTC(y, m-1, 1)).getUTCDay(), dim = new Date(Date.UTC(y, m, 0)).getUTCDate();
@@ -321,7 +322,7 @@ const weekShort = w => w.from === w.to ? `${+w.from.slice(8)}.${+w.from.slice(5,
 
 /* ---------- state <-> URL (so a filtered view can be bookmarked or shared) ---------- */
 function writeHash(){
-  const p = new URLSearchParams({t:STATE.type, p:STATE.key});
+  const p = new URLSearchParams(STATE.type === 'today' ? {t:'today'} : {t:STATE.type, p:STATE.key});
   if(curWeek()) p.set('w', STATE.week);
   if(STATE.branch) p.set('b', STATE.branch);
   history.replaceState(null, '', '#' + p.toString());
@@ -330,7 +331,7 @@ function readHash(){
   try{
     const p = new URLSearchParams(location.hash.slice(1));
     const t = p.get('t'), k = p.get('p'), b = p.get('b'), w = parseInt(p.get('w'), 10);
-    if(t && PT[t]){ STATE.type = t; if(k && periodsList(t).includes(k)) STATE.key = k; }
+    if(t && PT[t]){ STATE.type = t; if(t === 'today') STATE.key = 'today'; else if(k && periodsList(t).includes(k)) STATE.key = k; }
     if(w > 0) STATE.week = w;                     // checked against the month in main()
     if(b && ALLOWED.includes(b)) STATE.branch = b;
   }catch(e){ /* ignore a malformed link */ }
@@ -343,7 +344,7 @@ function setType(t){
   const cur = ROWS.filter(r => PT[STATE.type].key(r[0]) === STATE.key);
   const anchor = cur.length ? cur.reduce((m, r) => r[0] > m ? r[0] : m, '') : MAXDAY;
   STATE.type = t;
-  STATE.key = PT[t].key(anchor);
+  STATE.key = t === 'today' ? 'today' : PT[t].key(anchor);
   STATE.week = null;
   render();
 }
@@ -357,7 +358,8 @@ function renderControls(){
   });
   const counts = {};
   ROWS.forEach(r => { if(inB(r)){ const k = PT[t].key(r[0]); counts[k] = (counts[k]||0) + 1; } });
-  document.getElementById('monthTabs').innerHTML = periodsList(t).reverse().map(k =>
+  document.getElementById('monthTabs').style.display = t === 'today' ? 'none' : '';
+  document.getElementById('monthTabs').innerHTML = t === 'today' ? '' : periodsList(t).reverse().map(k =>
     `<button class="month-tab ${k === STATE.key ? 'active' : ''}" data-k="${k}">${periodName(t, k, my && t !== 'year')}<span class="cnt">${counts[k] || 0}</span></button>`
   ).join('');
   document.querySelectorAll('.month-tab').forEach(b => b.onclick = () => { STATE.key = b.dataset.k; STATE.week = null; render(); });
@@ -385,7 +387,7 @@ function renderControls(){
     `<button class="branch-chip ${(STATE.branch || '') === c.v ? 'active' : ''}" data-b="${esc(c.v)}" aria-pressed="${(STATE.branch || '') === c.v}">${esc(c.name)}<span class="cnt">${c.n}</span></button>`
   ).join('');
   document.querySelectorAll('#branchChips .branch-chip').forEach(b => b.onclick = () => { STATE.branch = b.dataset.b || null; render(); });
-  document.getElementById('navTitle').textContent = curWeek() ? 'דוח לפי שבועות' : `דוח לפי ${PT[t].plural}`;
+  document.getElementById('navTitle').textContent = t === 'today' ? 'דוח יומי' : curWeek() ? 'דוח לפי שבועות' : `דוח לפי ${PT[t].plural}`;
 }
 
 function render(){
@@ -395,15 +397,20 @@ function render(){
   const wk = curWeek();
   const rows = ROWS.filter(r => PT[t].key(r[0]) === k && inB(r) && inW(r));
   const S = summarize(rows);
-  const pName = wk ? `שבוע ${wk.n} ב${monthName(k)}` : periodName(t, k, false), year = k.slice(0,4);
+  const isToday = t === 'today';
+  const pName = isToday ? 'היום' : wk ? `שבוע ${wk.n} ב${monthName(k)}` : periodName(t, k, false), year = isToday ? TODAY.slice(0,4) : k.slice(0,4);
   const bTag = br ? ' · ' + br : '';
-  const isCurrent = wk ? (TODAY >= wk.from && TODAY <= wk.to) : k === PT[t].key(MAXDAY);
+  const isCurrent = isToday ? false : wk ? (TODAY >= wk.from && TODAY <= wk.to) : k === PT[t].key(MAXDAY);
   const lastDay = ROWS.filter(r => PT[t].key(r[0]) === k && inW(r)).reduce((m, r) => r[0] > m ? r[0] : m, '');
 
   const ORD = ['ראשון','שני','שלישי','רביעי'];
   const longName = t === 'quarter' ? 'רבעון ' + ORD[+k.slice(-1)-1] : t === 'half' ? 'חציון ' + ORD[+k.slice(-1)-1] : pName;
-  document.getElementById('heroTitle').textContent = (t === 'year' ? `דוח שנת ${year}` : wk ? `דוח ${monthName(k)} ${year} · שבוע ${wk.n}` : `דוח ${longName} ${year}`) + bTag;
+  document.getElementById('heroTitle').textContent = (isToday ? `דוח היום · ${fmtDay(TODAY)}` : t === 'year' ? `דוח שנת ${year}` : wk ? `דוח ${monthName(k)} ${year} · שבוע ${wk.n}` : `דוח ${longName} ${year}`) + bTag;
   const sub = [];
+  if(isToday){
+    const u = dailyInfo.updated || '';
+    sub.push(u.slice(0,10) === TODAY ? `נכון לעדכון של ${u.slice(11,16)} · מתעדכן כל ערב ב-19:00` : 'הנתונים של היום עוד לא עודכנו · העדכון הבא ב-19:00');
+  }
   if(t === 'quarter' || t === 'half') sub.push(periodRange(t, k));
   if(wk) sub.push(weekRange(wk));
   if(isCurrent && lastDay) sub.push(`נתונים עד ${fmtDay(lastDay)} · ${wk ? 'השבוע' : PT[t].the} עדיין בתהליך`);
@@ -411,7 +418,7 @@ function render(){
   document.getElementById('hUp').textContent = S.up;
   document.getElementById('hSold').textContent = S.sold;
 
-  const inName = t === 'year' ? `ב-${year}` : `ב${pName}`;
+  const inName = isToday ? 'היום' : t === 'year' ? `ב-${year}` : `ב${pName}`;
   document.getElementById('convTitle').textContent = `אחוזי המרה ${t === 'year' ? year : pName}${bTag}`;
   document.getElementById('convHint').textContent = `כמה הצעות עלו ${inName}${br ? ' בסניף ' + br : ''} לעומת כמה מהן נסגרו`;
   document.getElementById('cvPct').textContent = fmt(rate(S.sold, S.up));
@@ -432,7 +439,7 @@ function render(){
       plugins:{legend:{position:'bottom', labels:{boxWidth:11, padding:14, font:{size:12}}},
         datalabels:{display:true, color:'#fff', font:{weight:'800', size:12}, textStrokeColor:'rgba(0,0,0,.4)', textStrokeWidth:3,
           formatter:v => v > 0 ? v : '', anchor:'center', align:'center'}},
-      scales:{x:{ticks:{font:{size:12}}, grid:{display:false}}, y:{beginAtZero:true, grace:'12%', ticks:{font:{size:11}}}}}});
+      scales:{x:{ticks:{font:{size:12}}, grid:{display:false}}, y:{beginAtZero:true, grace:'12%', ticks:{font:{size:11}, precision:0}}}}});
 
   // conversion per branch / per rep (>= 5 uploads)
   const cb = units.filter(b => b.up >= 5).sort((a,b) => rate(b.sold,b.up) - rate(a.sold,a.up));
@@ -460,7 +467,8 @@ function render(){
 function renderBranches(S){
   const box = document.getElementById('branches');
   if(!S.branches.length){
-    box.innerHTML = `<div class="card empty-card">${STATE.branch ? 'אין הצעות בסניף ' + esc(STATE.branch) + ' בתקופה הזו' : 'אין הצעות בתקופה הזו'}</div>`;
+    const when = STATE.type === 'today' ? 'היום' : 'בתקופה הזו';
+    box.innerHTML = `<div class="card empty-card">${STATE.branch ? 'אין הצעות בסניף ' + esc(STATE.branch) + ' ' + when : 'אין הצעות ' + when}</div>`;
     return;
   }
   box.innerHTML = S.branches.map(b => {
@@ -513,6 +521,9 @@ function toggleBranch(header){
 }
 
 function renderTrend(){
+  // the today view shows only today, no history
+  document.getElementById('trendCard').style.display = STATE.type === 'today' ? 'none' : '';
+  if(STATE.type === 'today') return;
   const wk = curWeek();
   if(wk){
     // a week view trends by the weeks of its month, the selected week highlighted
