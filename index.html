@@ -409,7 +409,7 @@ function render(){
   const sub = [];
   if(isToday){
     const u = dailyInfo.updated || '';
-    sub.push(u.slice(0,10) === TODAY ? `נכון לעדכון של ${u.slice(11,16)} · מתעדכן כל ערב ב-19:00` : 'הנתונים של היום עוד לא עודכנו · העדכון הבא ב-19:00');
+    sub.push(u.slice(0,10) === TODAY ? `נכון לעדכון של ${u.slice(11,16)} · מתעדכן כל שעה` : 'הנתונים של היום עוד לא עודכנו · מתעדכן כל שעה');
   }
   if(t === 'quarter' || t === 'half') sub.push(periodRange(t, k));
   if(wk) sub.push(weekRange(wk));
